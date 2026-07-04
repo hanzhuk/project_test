@@ -1,44 +1,20 @@
-# Go
+# Go Scaffold 依赖缓存
+go-scaffold.exe
+go-scaffold
 bin/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-vendor/
 
-# Dependency directories
-node_modules/
+# 测试产物
+*.test
 
 # IDE
 .idea/
 .vscode/
 *.swp
-*.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Environment and secrets
-.env
-.env.local
-*.pem
-*.key
-
-# Build artifacts
-dist/
-build/
-*.log
-
-# Temporary files
-*.tmp
-*.temp
-~$*.docx
-
-# Go workspace
-go.work
-go.work.sum
+# 生成的测试项目
+my-api/
+test-project/

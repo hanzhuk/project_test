@@ -1,0 +1,12 @@
+{
+  "project_name": "demo-api",
+  "backend": "echo",
+  "orm": "ent",
+  "database": "postgres",
+  "frontend": "react",
+  "module_path": "github.com/example/demo-api",
+  "enable_jwt": false,
+  "enable_docker": false,
+  "enable_ci": false,
+  "generated_at": "2026-07-01T18:08:23.5462524+08:00"
+}

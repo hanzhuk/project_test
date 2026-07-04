@@ -1,0 +1,21 @@
+# {{.ProjectName}} 环境变量配置示例
+# 复制此文件为 .env 并修改对应配置
+
+# 数据库配置
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=secret
+DB_NAME={{.ProjectName}}_db
+DB_SSL_MODE=disable
+
+# 数据库连接池配置
+DB_MAX_OPEN_CONNS=25
+DB_MAX_IDLE_CONNS=10
+
+# 服务配置
+PORT=8080
+
+# JWT 配置（启用 JWT 认证时需要）
+JWT_SECRET=your-super-secret-key-please-change-in-production
+JWT_EXPIRE_HOURS=24
