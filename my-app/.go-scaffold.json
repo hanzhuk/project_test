@@ -1,0 +1,12 @@
+{
+  "project_name": "my-app",
+  "backend": "echo",
+  "orm": "ent",
+  "database": "postgres",
+  "frontend": "react",
+  "module_path": "github.com/example/my-app",
+  "enable_jwt": false,
+  "enable_docker": false,
+  "enable_ci": false,
+  "generated_at": "2026-07-05T00:48:45.1840996+08:00"
+}

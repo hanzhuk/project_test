@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"{{.ModulePath}}/ent"
-	"{{.ModulePath}}/internal/response"
+	"github.com/example/my-app/ent"
+	"github.com/example/my-app/internal/response"
 
 	"github.com/labstack/echo/v4"
 )

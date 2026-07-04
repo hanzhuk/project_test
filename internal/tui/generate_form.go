@@ -123,35 +123,35 @@ func (m *generateFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusIdx = (m.focusIdx + 1) % 7
 			}
 		case "backspace":
-			// 退格删除输入
+			// 退格删除输入（按 []rune 处理防止中文字符截断乱码）
 			switch m.focusIdx {
 			case 0:
-				if len(m.description) > 0 {
-					m.description = m.description[:len(m.description)-1]
+				runes := []rune(m.description)
+				if len(runes) > 0 {
+					m.description = string(runes[:len(runes)-1])
 				}
 			case 2:
-				if len(m.entity) > 0 {
-					m.entity = m.entity[:len(m.entity)-1]
+				runes := []rune(m.entity)
+				if len(runes) > 0 {
+					m.entity = string(runes[:len(runes)-1])
 				}
 			case 3:
-				if len(m.fields) > 0 {
-					m.fields = m.fields[:len(m.fields)-1]
+				runes := []rune(m.fields)
+				if len(runes) > 0 {
+					m.fields = string(runes[:len(runes)-1])
 				}
 			}
 		default:
-			// 处理普通字符输入
-			if len(msg.String()) == 1 {
-				ch := msg.String()[0]
-				// 仅接受可打印字符
-				if ch >= 32 && ch < 127 {
-					switch m.focusIdx {
-					case 0:
-						m.description += string(ch)
-					case 2:
-						m.entity += string(ch)
-					case 3:
-						m.fields += string(ch)
-					}
+			// 处理普通字符输入（支持 UTF-8 中文字符）
+			if len(msg.Runes) > 0 {
+				str := string(msg.Runes)
+				switch m.focusIdx {
+				case 0:
+					m.description += str
+				case 2:
+					m.entity += str
+				case 3:
+					m.fields += str
 				}
 			}
 		}

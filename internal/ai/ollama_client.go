@@ -37,10 +37,10 @@ type ToolCall struct {
 }
 
 // FunctionCall 定义工具调用的函数名与参数。
-// Arguments 为 JSON 字符串，需反序列化为具体参数结构。
+// Arguments 可以是 JSON 对象，也可以是转义后的 JSON 字符串。
 type FunctionCall struct {
-	Name      string `json:"name"`                // 函数名，如 write_file
-	Arguments string `json:"arguments"`           // 参数 JSON 字符串
+	Name      string          `json:"name"`      // 函数名，如 write_file
+	Arguments json.RawMessage `json:"arguments"` // 参数 JSON（RawMessage 兼容对象与字符串）
 }
 
 // Tool 定义传给 Ollama 的工具描述。

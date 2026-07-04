@@ -40,8 +40,8 @@ func (r *Repository) Close() {
 	}
 }
 
-// Client 返回 Ent 数据库客户端，供 handler 层使用。
-func (r *Repository) Client() *ent.Client {
+// GetClient 返回 Ent 数据库客户端，供 handler 层使用。
+func (r *Repository) GetClient() *ent.Client {
 	return r.Client
 }
 

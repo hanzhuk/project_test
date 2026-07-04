@@ -229,6 +229,10 @@ func printGenerateSuccess(input *ai.GenerateInput, code *ai.GeneratedCode, writt
 		fmt.Printf("  - %s\n", p)
 	}
 	fmt.Printf("\n后续步骤:\n")
-	fmt.Printf("  go mod tidy\n")
-	fmt.Printf("  go build ./...\n")
+	fmt.Printf("  1. 编译 Ent Schema 客户端 (使用 Ent ORM 时):\n")
+	fmt.Printf("     go run -mod=mod entgo.io/ent/cmd/ent generate ./ent/schema\n")
+	fmt.Printf("  2. 整理并下载包依赖:\n")
+	fmt.Printf("     go mod tidy\n")
+	fmt.Printf("  3. 编译校验:\n")
+	fmt.Printf("     go build ./...\n")
 }

@@ -138,6 +138,7 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&backend, "backend", "", "后端框架，可选值：echo、fiber、gin")
 	cmd.Flags().StringVar(&orm, "orm", "", "ORM 框架，可选值：ent、sqlc、gorm")
 	cmd.Flags().StringVar(&database, "db", "", "数据库，可选值：postgres、mysql、sqlite")
+	cmd.Flags().StringVar(&database, "database", "", "数据库，可选值：postgres、mysql、sqlite")
 	cmd.Flags().StringVar(&frontend, "frontend", "", "前端框架，可选值：react、vue、svelte")
 	cmd.Flags().BoolVar(&jwt, "jwt", false, "是否启用 JWT 认证")
 	cmd.Flags().BoolVar(&docker, "docker", false, "是否生成 Docker 配置")
@@ -195,8 +196,24 @@ func printInitSuccess(opts project.ProjectOptions) {
 		fmt.Printf("  CI/CD: 已生成\n")
 	}
 	fmt.Printf("\n后续步骤:\n")
-	fmt.Printf("  cd %s\n", opts.Name)
-	fmt.Printf("  go mod tidy\n")
-	fmt.Printf("  docker-compose up -d db\n")
-	fmt.Printf("  go run ./cmd/server\n")
+	fmt.Printf("  1. 进入项目目录:\n")
+	fmt.Printf("     cd %s\n", opts.Name)
+	fmt.Printf("  2. AI 自动生成业务代码 (可选):\n")
+	fmt.Printf("     ..\\go-scaffold.exe generate \"user CRUD\" --no-tui\n")
+	if opts.ORM == "ent" {
+		fmt.Printf("  3. 编译 Ent Schema 客户端:\n")
+		fmt.Printf("     go run -mod=mod entgo.io/ent/cmd/ent generate ./ent/schema\n")
+	}
+	fmt.Printf("  4. 整理并下载包依赖:\n")
+	fmt.Printf("     go mod tidy\n")
+	if opts.EnableDocker {
+		fmt.Printf("  5. 启动数据库容器:\n")
+		fmt.Printf("     docker compose up -d db\n")
+	}
+	fmt.Printf("  6. 运行后端服务:\n")
+	fmt.Printf("     go run ./cmd/server\n")
+	if opts.Frontend != "" {
+		fmt.Printf("  7. 启动前端界面 (另开终端窗口):\n")
+		fmt.Printf("     cd web && npm install && npm run dev\n")
+	}
 }

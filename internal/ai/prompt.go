@@ -104,7 +104,33 @@ func buildSystemPrompt(meta *metadata.ProjectMetadata) string {
 7. 使用 %s 框架的上下文处理方式注册路由。
 8. 使用 %s 进行数据库操作，禁止手写 SQL 字符串拼接。
 9. 字段类型使用 Go 标准类型，时间字段统一使用 time.Time。
-10. 生成的代码必须可直接编译，import 路径使用项目模块路径 %s。`,
+10. 生成的代码必须可直接编译，import 路径使用项目模块路径 %s。
+11. 若生成 ent/schema/*.go，只能 import "entgo.io/ent"、"entgo.io/ent/schema/field" 和 (必要时) "time"，严禁引用 entgql、entql、entsql 或不存在的包。
+12. 生成 ent/schema/*.go 时必须严格遵守 Ent 官方标准 Field 方法（如 NotEmpty(), MinLen(), MaxLen(), Positive(), Min(), Max(), Default(), Optional()），严禁虚构方法（如 Ceil, Negative, Round, Table 等）。
+范例格式：
+package schema
+
+import (
+	"entgo.io/ent"
+	"entgo.io/ent/schema/field"
+)
+
+type Book struct {
+	ent.Schema
+}
+
+func (Book) Fields() []ent.Field {
+	return []ent.Field{
+		field.String("title").NotEmpty(),
+		field.String("author").NotEmpty(),
+		field.Float("price").Min(0).Optional(),
+	}
+}
+
+func (Book) Edges() []ent.Edge {
+	return nil
+}
+`,
 		backendName(meta.Backend),
 		ormName(meta.ORM),
 		databaseName(meta.Database),
@@ -165,10 +191,19 @@ func parseToolCalls(toolCalls []ToolCall) (*GeneratedCode, error) {
 		if tc.Function.Name != "write_file" {
 			continue
 		}
-		// 反序列化参数 JSON 字符串
+		// 反序列化参数 JSON（兼容 JSON 对象与转义字符串）
 		var args WriteFileArgs
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-			return nil, fmt.Errorf("第 %d 个 tool_call 参数解析失败: %w", i+1, err)
+		raw := tc.Function.Arguments
+		if err := json.Unmarshal(raw, &args); err != nil {
+			// 尝试二次反序列化（防止模型返回被双重转义的字符串）
+			var strArgs string
+			if errStr := json.Unmarshal(raw, &strArgs); errStr == nil {
+				if errInner := json.Unmarshal([]byte(strArgs), &args); errInner != nil {
+					return nil, fmt.Errorf("第 %d 个 tool_call 参数解析失败: %w", i+1, errInner)
+				}
+			} else {
+				return nil, fmt.Errorf("第 %d 个 tool_call 参数解析失败: %w", i+1, err)
+			}
 		}
 		// 校验 path 非空
 		if args.Path == "" {
