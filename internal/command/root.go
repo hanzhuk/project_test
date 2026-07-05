@@ -80,13 +80,21 @@ func resolveModulePath(flagValue string) string {
 // resolveOllamaModel 解析最终使用的 Ollama 模型。
 // 优先使用 flag 值，其次使用配置文件的值，最后使用默认值。
 func resolveOllamaModel(flagValue string) string {
-	if flagValue != "" {
-		return flagValue
+	res := flagValue
+	if res == "" {
+		if globalCfg != nil && globalCfg.OllamaModel != "" {
+			res = globalCfg.OllamaModel
+		} else {
+			res = "qwen2.5-coder:7b"
+		}
 	}
-	if globalCfg != nil && globalCfg.OllamaModel != "" {
-		return globalCfg.OllamaModel
+	// 自动兼容容错处理：将用户误敲的 qwen2.5-coder-7b 转换为标准的 qwen2.5-coder:7b
+	if res == "qwen2.5-coder-7b" {
+		res = "qwen2.5-coder:7b"
+	} else if res == "qwen3.5-9b" {
+		res = "qwen3.5:9b"
 	}
-	return "ornith:9b"
+	return res
 }
 
 // resolveOllamaHost 解析最终的 Ollama 服务地址。

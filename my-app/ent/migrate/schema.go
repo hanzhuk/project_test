@@ -12,7 +12,7 @@ var (
 	BooksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "title", Type: field.TypeString, Size: 256},
-		{Name: "author", Type: field.TypeString},
+		{Name: "author", Type: field.TypeString, Size: 128},
 		{Name: "price", Type: field.TypeFloat64},
 	}
 	// BooksTable holds the schema information for the "books" table.

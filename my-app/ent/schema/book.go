@@ -12,7 +12,7 @@ type Book struct {
 
 func (Book) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").NotEmpty().MaxLen(256),
+		field.String("title").NotEmpty(),
 		field.String("author").NotEmpty(),
 		field.Float("price"),
 	}

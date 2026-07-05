@@ -120,7 +120,7 @@ func newGenerateCmd() *cobra.Command {
 				"code_type", input.CodeType,
 				"project", meta.ProjectName,
 			)
-			code, err := generator.GenerateWithRetry(ctx, input, meta, nil)
+			code, err := generator.GenerateStepByStep(ctx, input, meta, nil)
 			if err != nil {
 				return err
 			}

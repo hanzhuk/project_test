@@ -80,6 +80,52 @@ func main() {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// OpenAPI 3.1 规格声明路由
+	e.GET("/openapi.json", func(c echo.Context) error {
+		openapiSpec := map[string]interface{}{
+			"openapi": "3.1.0",
+			"info": map[string]string{
+				"title":       "{{.ProjectName}} API",
+				"version":     "1.0.0",
+				"description": "Golang AI 原生生成的 RESTful API 文档",
+			},
+			"paths": map[string]interface{}{
+				"/api/v1/ping": map[string]interface{}{
+					"get": map[string]interface{}{
+						"summary":     "Ping 健康探活接口",
+						"responses": map[string]interface{}{
+							"200": map[string]string{"description": "成功返回 pong"},
+						},
+					},
+				},
+			},
+		}
+		return c.JSON(http.StatusOK, openapiSpec)
+	})
+
+	// Swagger UI 交互式文档页面
+	e.GET("/docs", func(c echo.Context) error {
+		htmlContent := `<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenAPI 3.1 文档 - {{.ProjectName}}</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+    });
+  </script>
+</body>
+</html>`
+		return c.HTML(http.StatusOK, htmlContent)
+	})
+
 	// 注册业务路由（API v1）
 	handler.RegisterRoutes(e, repo)
 

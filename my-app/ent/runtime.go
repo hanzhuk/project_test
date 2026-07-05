@@ -34,5 +34,19 @@ func init() {
 	// bookDescAuthor is the schema descriptor for author field.
 	bookDescAuthor := bookFields[1].Descriptor()
 	// book.AuthorValidator is a validator for the "author" field. It is called by the builders before save.
-	book.AuthorValidator = bookDescAuthor.Validators[0].(func(string) error)
+	book.AuthorValidator = func() func(string) error {
+		validators := bookDescAuthor.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(author string) error {
+			for _, fn := range fns {
+				if err := fn(author); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 }

@@ -82,9 +82,9 @@ func (g *CodeGenerator) Generate(ctx context.Context, input *GenerateInput, meta
 		)
 	}
 
-	// 5. 对每个文件执行 go/ast 语法校验
+	// 5. 对每个 .go 文件执行 go/ast 语法校验，非 Go 文件跳过
 	for _, f := range code.Files {
-		if err := g.ValidateSyntax(f.Content); err != nil {
+		if err := g.ValidateSyntaxForPath(f.Path, f.Content); err != nil {
 			return nil, errors.NewScaffoldError(
 				errors.CodeInvalidOutput,
 				fmt.Sprintf("生成代码语法校验失败 [%s]", f.Path),
@@ -189,4 +189,105 @@ func pow(base float64, exp float64) float64 {
 		result *= base
 	}
 	return result
+}
+
+// GenerateStepByStep 分步生成代码，每步只生成一个文件。
+// 适用于 Tool Calling 能力较弱的小模型（如 9b 级别），每次 API 调用只要求模型
+// 生成一个文件，大幅提高成功率。失败的步骤会记录警告后跳过，不中断整体流程。
+func (g *CodeGenerator) GenerateStepByStep(
+	ctx context.Context,
+	input *GenerateInput,
+	meta *metadata.ProjectMetadata,
+	policy *RetryPolicy,
+) (*GeneratedCode, error) {
+	if policy == nil {
+		policy = DefaultRetryPolicy()
+	}
+
+	steps := BuildSteps(input, meta)
+	allFiles := make([]CodeFile, 0, len(steps))
+
+	for _, step := range steps {
+		log.Info("分步生成", "step", step.Name, "target", step.TargetPath)
+		file, err := g.generateSingleFile(ctx, step, policy)
+		if err != nil {
+			log.Warn("步骤生成失败，跳过", "step", step.Name, "err", err)
+			continue
+		}
+		allFiles = append(allFiles, *file)
+		log.Info("步骤完成", "step", step.Name, "path", file.Path)
+	}
+
+	if len(allFiles) == 0 {
+		return nil, errors.NewScaffoldError(
+			errors.CodeInvalidOutput,
+			"所有步骤均生成失败",
+			nil,
+		).WithDetails("请确认 Ollama 服务正常，并检查模型是否支持 Tool Calling")
+	}
+
+	log.Info("分步生成完成", "total_files", len(allFiles), "total_steps", len(steps))
+	return &GeneratedCode{Files: allFiles}, nil
+}
+
+// generateSingleFile 发起单次 API 调用，要求模型只生成一个指定文件。
+func (g *CodeGenerator) generateSingleFile(ctx context.Context, step GenerationStep, policy *RetryPolicy) (*CodeFile, error) {
+	messages := []ChatMessage{
+		{Role: "system", Content: step.SystemPrompt},
+		{Role: "user", Content: step.UserPrompt},
+	}
+
+	req := &ChatRequest{
+		Model:    g.model,
+		Messages: messages,
+		Tools:    []Tool{WriteFileToolDefinition},
+		Stream:   false,
+		Options: map[string]any{
+			"temperature": 0.1,
+			"top_p":       0.9,
+			"top_k":       40,
+			"num_predict": 4096,
+		},
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= policy.MaxRetries; attempt++ {
+		if attempt > 0 {
+			wait := time.Duration(float64(policy.Backoff) * pow(policy.BackoffFactor, float64(attempt-1)))
+			log.Info("重试步骤生成", "step", step.Name, "attempt", attempt, "wait", wait)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(wait):
+			}
+		}
+
+		resp, err := g.client.Chat(ctx, req)
+		if err != nil {
+			lastErr = errors.NewScaffoldError(errors.CodeOllamaConnection, "调用 Ollama 失败", err)
+			continue
+		}
+
+		code, err := parseToolCalls(resp.Message.ToolCalls)
+		if err != nil {
+			lastErr = errors.NewScaffoldError(errors.CodeInvalidOutput, "解析 tool_calls 失败", err)
+			continue
+		}
+
+		if len(code.Files) == 0 {
+			lastErr = errors.NewScaffoldError(errors.CodeInvalidOutput, "模型未返回任何文件", nil)
+			continue
+		}
+
+		file := &code.Files[0]
+		if err := g.ValidateSyntaxForPath(file.Path, file.Content); err != nil {
+			lastErr = errors.NewScaffoldError(errors.CodeInvalidOutput,
+				fmt.Sprintf("语法校验失败 [%s]", file.Path), err)
+			continue
+		}
+
+		return file, nil
+	}
+
+	return nil, lastErr
 }
