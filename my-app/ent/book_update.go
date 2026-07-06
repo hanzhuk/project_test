@@ -55,6 +55,12 @@ func (_u *BookUpdate) SetNillableAuthor(v *string) *BookUpdate {
 	return _u
 }
 
+// ClearAuthor clears the value of the "author" field.
+func (_u *BookUpdate) ClearAuthor() *BookUpdate {
+	_u.mutation.ClearAuthor()
+	return _u
+}
+
 // SetPrice sets the "price" field.
 func (_u *BookUpdate) SetPrice(v float64) *BookUpdate {
 	_u.mutation.ResetPrice()
@@ -115,11 +121,6 @@ func (_u *BookUpdate) check() error {
 			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Book.title": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Author(); ok {
-		if err := book.AuthorValidator(v); err != nil {
-			return &ValidationError{Name: "author", err: fmt.Errorf(`ent: validator failed for field "Book.author": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -140,6 +141,9 @@ func (_u *BookUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Author(); ok {
 		_spec.SetField(book.FieldAuthor, field.TypeString, value)
+	}
+	if _u.mutation.AuthorCleared() {
+		_spec.ClearField(book.FieldAuthor, field.TypeString)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(book.FieldPrice, field.TypeFloat64, value)
@@ -192,6 +196,12 @@ func (_u *BookUpdateOne) SetNillableAuthor(v *string) *BookUpdateOne {
 	if v != nil {
 		_u.SetAuthor(*v)
 	}
+	return _u
+}
+
+// ClearAuthor clears the value of the "author" field.
+func (_u *BookUpdateOne) ClearAuthor() *BookUpdateOne {
+	_u.mutation.ClearAuthor()
 	return _u
 }
 
@@ -268,11 +278,6 @@ func (_u *BookUpdateOne) check() error {
 			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Book.title": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Author(); ok {
-		if err := book.AuthorValidator(v); err != nil {
-			return &ValidationError{Name: "author", err: fmt.Errorf(`ent: validator failed for field "Book.author": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -310,6 +315,9 @@ func (_u *BookUpdateOne) sqlSave(ctx context.Context) (_node *Book, err error) {
 	}
 	if value, ok := _u.mutation.Author(); ok {
 		_spec.SetField(book.FieldAuthor, field.TypeString, value)
+	}
+	if _u.mutation.AuthorCleared() {
+		_spec.ClearField(book.FieldAuthor, field.TypeString)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(book.FieldPrice, field.TypeFloat64, value)

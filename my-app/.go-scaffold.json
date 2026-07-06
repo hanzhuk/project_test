@@ -6,7 +6,7 @@
   "frontend": "react",
   "module_path": "github.com/example/my-app",
   "enable_jwt": false,
-  "enable_docker": false,
-  "enable_ci": false,
-  "generated_at": "2026-07-05T23:43:28.107522+08:00"
+  "enable_docker": true,
+  "enable_ci": true,
+  "generated_at": "2026-07-06T23:30:22.7486039+08:00"
 }

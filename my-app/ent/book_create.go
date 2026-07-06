@@ -31,9 +31,25 @@ func (_c *BookCreate) SetAuthor(v string) *BookCreate {
 	return _c
 }
 
+// SetNillableAuthor sets the "author" field if the given value is not nil.
+func (_c *BookCreate) SetNillableAuthor(v *string) *BookCreate {
+	if v != nil {
+		_c.SetAuthor(*v)
+	}
+	return _c
+}
+
 // SetPrice sets the "price" field.
 func (_c *BookCreate) SetPrice(v float64) *BookCreate {
 	_c.mutation.SetPrice(v)
+	return _c
+}
+
+// SetNillablePrice sets the "price" field if the given value is not nil.
+func (_c *BookCreate) SetNillablePrice(v *float64) *BookCreate {
+	if v != nil {
+		_c.SetPrice(*v)
+	}
 	return _c
 }
 
@@ -44,6 +60,7 @@ func (_c *BookCreate) Mutation() *BookMutation {
 
 // Save creates the Book in the database.
 func (_c *BookCreate) Save(ctx context.Context) (*Book, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -69,6 +86,14 @@ func (_c *BookCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_c *BookCreate) defaults() {
+	if _, ok := _c.mutation.Price(); !ok {
+		v := book.DefaultPrice
+		_c.mutation.SetPrice(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (_c *BookCreate) check() error {
 	if _, ok := _c.mutation.Title(); !ok {
@@ -77,14 +102,6 @@ func (_c *BookCreate) check() error {
 	if v, ok := _c.mutation.Title(); ok {
 		if err := book.TitleValidator(v); err != nil {
 			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Book.title": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.Author(); !ok {
-		return &ValidationError{Name: "author", err: errors.New(`ent: missing required field "Book.author"`)}
-	}
-	if v, ok := _c.mutation.Author(); ok {
-		if err := book.AuthorValidator(v); err != nil {
-			return &ValidationError{Name: "author", err: fmt.Errorf(`ent: validator failed for field "Book.author": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Price(); !ok {
@@ -149,6 +166,7 @@ func (_c *BookCreateBulk) Save(ctx context.Context) ([]*Book, error) {
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*BookMutation)
 				if !ok {

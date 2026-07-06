@@ -187,6 +187,16 @@ func AuthorHasSuffix(v string) predicate.Book {
 	return predicate.Book(sql.FieldHasSuffix(FieldAuthor, v))
 }
 
+// AuthorIsNil applies the IsNil predicate on the "author" field.
+func AuthorIsNil() predicate.Book {
+	return predicate.Book(sql.FieldIsNull(FieldAuthor))
+}
+
+// AuthorNotNil applies the NotNil predicate on the "author" field.
+func AuthorNotNil() predicate.Book {
+	return predicate.Book(sql.FieldNotNull(FieldAuthor))
+}
+
 // AuthorEqualFold applies the EqualFold predicate on the "author" field.
 func AuthorEqualFold(v string) predicate.Book {
 	return predicate.Book(sql.FieldEqualFold(FieldAuthor, v))

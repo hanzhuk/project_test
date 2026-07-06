@@ -330,7 +330,7 @@ func BuildSteps(input *GenerateInput, meta *metadata.ProjectMetadata) []Generati
 
 	if meta.Frontend != "" && meta.Frontend != "none" {
 		steps = append(steps,
-			buildFrontendStep(entity, entityLower, entityPlural, meta),
+			buildFrontendStep(entity, entityLower, entityPlural, input.Fields, meta),
 			buildAppTsxStep(entity, meta),
 		)
 	}
@@ -351,92 +351,148 @@ func buildFieldDesc(fields []Field) string {
 
 func buildSchemaStep(entity, entityLower, fieldDesc string, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := fmt.Sprintf("ent/schema/%s.go", entityLower)
-	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s。
-规则：
-- 只能 import "entgo.io/ent"、"entgo.io/ent/schema/field"，需要时可加 "time"。
-- 只使用 Ent 官方 Field 方法：NotEmpty, MinLen, MaxLen, Positive, Min, Max, Default, Optional。
-- 生成后立即停止，不要生成其他文件。`, targetPath)
+	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-	user := fmt.Sprintf(`生成 Ent Schema 文件：%s
+【Ent 字段类型映射，严格遵守，禁止使用其他名称】
+  string  → field.String("name")
+  int     → field.Int("name")
+  float   → field.Float("name")   ← 注意：是 Float 不是 Float64
+  bool    → field.Bool("name")
+  time    → field.Time("name")
+
+【禁止使用】field.Float64、field.Int64、field.Integer 等不存在的方法。
+【允许的修饰方法】NotEmpty(), MinLen(n), MaxLen(n), Positive(), Min(n), Max(n), Default(v), Optional()
+【只允许的 import】"entgo.io/ent"、"entgo.io/ent/schema/field"，需要时加 "time"`, targetPath)
+
+	user := fmt.Sprintf(`生成文件 %s
 实体名：%s
 字段：
 %s
-package 为 schema，struct 嵌入 ent.Schema，实现 Fields() 和 Edges() 方法。`, targetPath, entity, fieldDesc)
+示例格式（严格照此结构）：
+package schema
+import ("entgo.io/ent"; "entgo.io/ent/schema/field")
+type %s struct { ent.Schema }
+func (%s) Fields() []ent.Field { return []ent.Field{ field.String("title").NotEmpty() } }
+func (%s) Edges() []ent.Edge { return nil }`, targetPath, entity, fieldDesc, entity, entity, entity)
 
 	return GenerationStep{Name: "schema", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }
 
 func buildHandlerStep(entity, entityLower, entityPlural, fieldDesc string, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := fmt.Sprintf("internal/handler/%s_handler.go", entityLower)
-	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s。
-规则：
-- 使用 Echo 框架，handler 函数签名为 func (h *Handler) XxxYyy(c echo.Context) error。
-- 使用 Ent client（类型为 *ent.Client）操作数据库，禁止手写 SQL。
-- 所有错误必须返回，使用 slog.ErrorContext 记录日志。
-- import 路径使用模块路径 %s。
-- 生成后立即停止，不要生成其他文件。`, targetPath, meta.ModulePath)
+	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-	user := fmt.Sprintf(`生成 Echo HTTP Handler 文件：%s
-实体名：%s，路由前缀：/api/v1/%s
-字段：
+【绝对禁止——违反则代码无法编译】
+❌ 禁止使用 ent.%sCreateInput、ent.%sUpdateInput、ent.%sMutation——这些类型在 Ent 中不存在
+❌ 禁止忽略错误：_, _ = xxx 或 _, err = xxx 后不检查 err
+❌ 禁止只返回 id 和 title，必须直接返回 ent 查询结果对象
+
+【必须这样写 request struct（不能用 ent 的类型）】
+type %sRequest struct {
+  Title  string  `+"`"+`json:"title"`+"`"+`
+  Author string  `+"`"+`json:"author"`+"`"+`
+  Price  float64 `+"`"+`json:"price"`+"`"+`
+}
+
+【必须这样调用 Ent（严格照此写法，不能自创方法名）】
+  创建：h.Client.%s.Create().SetTitle(req.Title).SetAuthor(req.Author).SetPrice(req.Price).Save(ctx)
+  列表：h.Client.%s.Query().All(ctx)
+  按ID：h.Client.%s.Get(ctx, id)      // id 是 int，用 strconv.Atoi 解析
+  更新：h.Client.%s.UpdateOneID(id).SetTitle(req.Title).SetPrice(req.Price).Save(ctx)
+  删除：h.Client.%s.DeleteOneID(id).Exec(ctx)
+
+【响应】
+  成功：return c.JSON(http.StatusOK, response.Success(result))   // result 是 ent 返回的对象
+  错误：return c.JSON(http.StatusBadRequest, response.Error(400, "msg"))
+
+【import】必须包含："%s/ent", "%s/internal/response", "github.com/labstack/echo/v4", "log/slog", "net/http", "strconv"`,
+		targetPath,
+		entity, entity, entity,
+		entity,
+		entity, entity, entity, entity, entity,
+		meta.ModulePath, meta.ModulePath)
+
+	user := fmt.Sprintf(`生成文件 %s
+实体名：%s，路由前缀 /api/v1/%s
+字段列表（根据字段生成 %sRequest struct 和对应的 SetXxx 调用）：
 %s
-需包含以下 5 个方法：
-- Create%s：POST /api/v1/%s，从 JSON body 读取字段，调用 ent.Client 插入数据库。
-- List%ss：GET /api/v1/%s，查询全部记录并返回列表。
-- Get%s：GET /api/v1/%s/:id，按 ID 查询单条记录。
-- Update%s：PUT /api/v1/%s/:id，更新字段。
-- Delete%s：DELETE /api/v1/%s/:id，删除记录。
-Handler struct 持有 *ent.Client，构造函数为 NewHandler(client *ent.Client) *Handler。
-使用 response.Success(data) 和 response.Fail(code, msg) 返回统一格式。`,
-		targetPath, entity, entityPlural,
-		fieldDesc,
-		entity, entityPlural,
-		entity, entityPlural,
-		entity, entityPlural,
-		entity, entityPlural,
-		entity, entityPlural,
-	)
+5个方法：Create%s、List%ss、Get%s、Update%s、Delete%s
+所有方法必须挂载在已有的 *Handler 上，Handler 已持有 h.Client *ent.Client。`,
+		targetPath, entity, entityPlural, entity, fieldDesc,
+		entity, entity, entity, entity, entity)
 
 	return GenerationStep{Name: "handler", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }
 
 func buildServiceStep(entity, entityLower, fieldDesc string, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := fmt.Sprintf("internal/service/%s_service.go", entityLower)
-	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s。
-规则：
-- 使用 Ent client（*ent.Client）操作数据库。
-- 所有方法接收 context.Context 作为第一个参数。
-- import 路径使用模块路径 %s。
-- 生成后立即停止，不要生成其他文件。`, targetPath, meta.ModulePath)
+	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-	user := fmt.Sprintf(`生成业务逻辑层文件：%s
-实体名：%s
-字段：
+【绝对禁止】
+❌ 禁止使用 book.Entity、ent.%sEntity——返回类型必须是 *ent.%s 或 []*ent.%s
+❌ 禁止 import "%s/ent/%s"（除非用到排序常量，否则不要引入）
+❌ 禁止忽略错误
+
+【必须这样写】
+- import 只需要："context" 和 "%s/ent"
+- Service struct：type %sService struct { client *ent.Client }
+- 返回类型：*ent.%s 或 []*ent.%s（不是 book.Entity）
+- Ent API：s.client.%s.Create().SetTitle(t).Save(ctx)`,
+		targetPath,
+		entity, entity, entity,
+		meta.ModulePath, entityLower,
+		meta.ModulePath,
+		entity, entity, entity, entity)
+
+	user := fmt.Sprintf(`生成文件 %s
+实体名：%s，字段：
 %s
-包含 Create、List、GetByID、Update、Delete 五个方法，每个方法接收 ctx context.Context 和必要参数，返回结果与 error。
-Service struct 持有 *ent.Client，构造函数为 New%sService(client *ent.Client) *%sService。`,
+构造函数 New%sService(client *ent.Client) *%sService。
+包含 Create、List、GetByID、Update、Delete 五个方法。`,
 		targetPath, entity, fieldDesc, entity, entity)
 
 	return GenerationStep{Name: "service", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }
 
-func buildFrontendStep(entity, entityLower, entityPlural string, meta *metadata.ProjectMetadata) GenerationStep {
+func buildFrontendStep(entity, entityLower, entityPlural string, fields []Field, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := fmt.Sprintf("web/src/components/%sManager.tsx", entity)
-	system := fmt.Sprintf(`你是 React TypeScript 前端专家。只需调用一次 write_file 工具，生成文件 %s。
-规则：
-- 使用 React 19 + TypeScript + Tailwind CSS。
-- 使用 fetch 调用后端接口，不引入额外依赖库。
-- 生成后立即停止，不要生成其他文件。`, targetPath)
+	system := fmt.Sprintf(`你是 React TypeScript 前端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-	user := fmt.Sprintf(`生成 React CRUD 组件文件：%s
-实体名：%s，后端接口路径：/api/v1/%s
-组件功能：
-- 页面顶部显示数据列表（table 展示所有记录）。
-- 列表上方有"新增"按钮，点击弹出表单。
-- 每行有"编辑"和"删除"按钮。
-- 表单支持新增和编辑，提交后刷新列表。
-- 使用 fetch 调用 GET /api/v1/%s 获取列表，POST/PUT/DELETE 进行增删改。
-export default %sManager;`, targetPath, entity, entityPlural, entityPlural, entity)
+【绝对禁止】
+❌ 禁止写 import React from 'react' 或 React.FormEvent、React.ChangeEvent
+❌ 禁止用动态 key 访问字段：item[header as keyof Item]
+❌ 禁止直接 setItems(await resp.json())，后端响应是 {code, message, data} 包装格式
+❌ 禁止在保存按钮上设置 disabled={editingId === -1}（保存按钮绝不能在新增时被禁用）
+
+【第一行 import 必须完整列出所有用到的 hook】
+import { useState, useEffect, FormEvent } from 'react'
+
+【后端响应解包——必须这样写】
+fetch('/api/v1/%s').then(r=>r.json()).then(json=>{ if(json.code===0) setItems(json.data) })
+
+【新增/编辑 UI 模式——必须严格照此实现】
+- 用 editingId: number|null 控制表单显示，null=隐藏，-1=新增，>0=编辑
+- "新增"按钮：onClick={() => { setEditingId(-1); resetForm() }}
+- 点击编辑时，必须将当前行的实体数据加载到表单状态中（不要调用 resetForm() 清空）
+- 表单显示条件：{editingId !== null && <form>...</form>}
+- 提交时判断：if(editingId === -1) 调用 POST，else 调用 PUT /{editingId}
+- "取消"按钮：onClick={() => setEditingId(null)}
+- 表单保存按钮：必须保持可用状态，不能禁用
+
+【表格渲染——必须用明确字段名】
+正确：<td>{item.title}</td><td>{item.author}</td>
+错误：{headers.map(h => <td>{item[h]}</td>)}
+
+【其他规则】使用 Tailwind CSS，使用 fetch 不用 axios。`,
+		targetPath, entityPlural)
+
+	fieldDesc := buildFieldDesc(fields)
+	user := fmt.Sprintf(`生成文件 %s
+实体名：%s，后端接口基路径：/api/v1/%s
+实体包含以下字段，请在表格和表单中只使用这些字段（不要虚构其他字段）：
+%s
+功能：搜索过滤、新增、编辑、删除的完整 CRUD 界面。
+export default function %sManager()`, targetPath, entity, entityPlural, fieldDesc, entity)
 
 	return GenerationStep{Name: "frontend", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }
@@ -444,16 +500,18 @@ export default %sManager;`, targetPath, entity, entityPlural, entityPlural, enti
 func buildAppTsxStep(entity string, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := "web/src/App.tsx"
 	componentName := fmt.Sprintf("%sManager", entity)
-	system := fmt.Sprintf(`你是 React TypeScript 前端专家。只需调用一次 write_file 工具，生成文件 %s。
-规则：
-- 替换原有 App.tsx 全部内容。
-- 生成后立即停止，不要生成其他文件。`, targetPath)
+	system := `你是 React TypeScript 前端专家。只需调用一次 write_file 工具，生成文件 web/src/App.tsx，生成后立即停止。
+替换文件全部内容，只写导入和默认导出，不要添加其他逻辑。`
 
-	user := fmt.Sprintf(`更新 web/src/App.tsx，导入并渲染 %s 组件作为主页面。
-内容：
+	user := fmt.Sprintf(`生成 web/src/App.tsx，内容如下（完整输出，不要省略）：
 import %s from './components/%s'
-export default function App() { return <div className="p-4"><%%s /></div> }
-（将 %%s 替换为 %s 组件标签）`, componentName, componentName, componentName, componentName)
+export default function App() {
+  return (
+    <div>
+      <%s />
+    </div>
+  )
+}`, componentName, componentName, componentName)
 
 	return GenerationStep{Name: "app-tsx", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }

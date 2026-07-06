@@ -42,8 +42,8 @@ func ValidColumn(column string) bool {
 var (
 	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	TitleValidator func(string) error
-	// AuthorValidator is a validator for the "author" field. It is called by the builders before save.
-	AuthorValidator func(string) error
+	// DefaultPrice holds the default value on creation for the "price" field.
+	DefaultPrice float64
 )
 
 // OrderOption defines the ordering options for the Book queries.

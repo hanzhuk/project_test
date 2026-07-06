@@ -137,6 +137,23 @@ func newGenerateCmd() *cobra.Command {
 				return err
 			}
 
+			// 自动注册路由到 handler.go
+			if input.Entity != "" {
+				if err := injectRoutes(cwd, input.Entity); err != nil {
+					log.Warn("自动注册路由失败，请手动添加", "err", err)
+				}
+			}
+
+			// 修复 TSX 文件的 import 问题
+			for _, p := range written {
+				if strings.HasSuffix(p, ".tsx") {
+					fullPath := filepath.Join(cwd, p)
+					if err := fixTsxImports(fullPath); err != nil {
+						log.Warn("修复 TSX import 失败", "path", p, "err", err)
+					}
+				}
+			}
+
 			// 输出成功信息
 			printGenerateSuccess(input, code, written)
 			return nil

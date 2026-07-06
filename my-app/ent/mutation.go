@@ -207,9 +207,22 @@ func (m *BookMutation) OldAuthor(ctx context.Context) (v string, err error) {
 	return oldValue.Author, nil
 }
 
+// ClearAuthor clears the value of the "author" field.
+func (m *BookMutation) ClearAuthor() {
+	m.author = nil
+	m.clearedFields[book.FieldAuthor] = struct{}{}
+}
+
+// AuthorCleared returns if the "author" field was cleared in this mutation.
+func (m *BookMutation) AuthorCleared() bool {
+	_, ok := m.clearedFields[book.FieldAuthor]
+	return ok
+}
+
 // ResetAuthor resets all changes to the "author" field.
 func (m *BookMutation) ResetAuthor() {
 	m.author = nil
+	delete(m.clearedFields, book.FieldAuthor)
 }
 
 // SetPrice sets the "price" field.
@@ -415,7 +428,11 @@ func (m *BookMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *BookMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(book.FieldAuthor) {
+		fields = append(fields, book.FieldAuthor)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -428,6 +445,11 @@ func (m *BookMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *BookMutation) ClearField(name string) error {
+	switch name {
+	case book.FieldAuthor:
+		m.ClearAuthor()
+		return nil
+	}
 	return fmt.Errorf("unknown Book nullable field %s", name)
 }
 

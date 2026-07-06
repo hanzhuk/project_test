@@ -16,37 +16,9 @@ func init() {
 	// bookDescTitle is the schema descriptor for title field.
 	bookDescTitle := bookFields[0].Descriptor()
 	// book.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	book.TitleValidator = func() func(string) error {
-		validators := bookDescTitle.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(title string) error {
-			for _, fn := range fns {
-				if err := fn(title); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// bookDescAuthor is the schema descriptor for author field.
-	bookDescAuthor := bookFields[1].Descriptor()
-	// book.AuthorValidator is a validator for the "author" field. It is called by the builders before save.
-	book.AuthorValidator = func() func(string) error {
-		validators := bookDescAuthor.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(author string) error {
-			for _, fn := range fns {
-				if err := fn(author); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	book.TitleValidator = bookDescTitle.Validators[0].(func(string) error)
+	// bookDescPrice is the schema descriptor for price field.
+	bookDescPrice := bookFields[2].Descriptor()
+	// book.DefaultPrice holds the default value on creation for the price field.
+	book.DefaultPrice = bookDescPrice.Default.(float64)
 }

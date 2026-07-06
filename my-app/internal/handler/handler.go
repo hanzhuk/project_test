@@ -37,12 +37,13 @@ func RegisterRoutes(e *echo.Echo, repo Repo) {
 	v1.GET("/ping", h.Ping)
 	v1.GET("/health", h.Ping)
 
-	// TODO: 在此处注册业务路由，例如：
-	// v1.POST("/users", h.CreateUser)
-	// v1.GET("/users", h.ListUsers)
-	// v1.GET("/users/:id", h.GetUser)
-	// v1.PUT("/users/:id", h.UpdateUser)
-	// v1.DELETE("/users/:id", h.DeleteUser)
+
+	// Book 路由
+	v1.POST("/books", h.CreateBook)
+	v1.GET("/books", h.ListBooks)
+	v1.GET("/books/:id", h.GetBook)
+	v1.PUT("/books/:id", h.UpdateBook)
+	v1.DELETE("/books/:id", h.DeleteBook)
 }
 
 // Repo 定义数据访问层接口，handler 通过它获取数据库客户端。
