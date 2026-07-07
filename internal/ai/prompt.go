@@ -360,8 +360,19 @@ func buildSchemaStep(entity, entityLower, fieldDesc string, meta *metadata.Proje
   bool    → field.Bool("name")
   time    → field.Time("name")
 
-【禁止使用】field.Float64、field.Int64、field.Integer 等不存在的方法。
-【允许的修饰方法】NotEmpty(), MinLen(n), MaxLen(n), Positive(), Min(n), Max(n), Default(v), Optional()
+【绝对禁止——违反则 ent generate 报错】
+❌ 禁止 field.Float64、field.Int64、field.Integer 等不存在的方法
+❌ 禁止 field.Float("price").Default(0.0).Positive()——Default(0.0) 与 Positive() 矛盾，0.0 不满足 > 0，只用其中一个
+❌ 禁止 field.Time("x").Default(time.Now())——括号调用返回 time.Time 值，Ent 要求传函数引用
+❌ 禁止 field.Time("x").Default(func() interface{} { return nil })——类型错误，Ent 要求 func() time.Time
+❌ 禁止 field.Int("stock") 不加 Optional() 或 Default(0)——没有默认值的必填字段会导致插入失败
+
+【time 字段的正确写法】
+  可选，不设默认：field.Time("published_at").Optional()
+  有默认值：      field.Time("created_at").Default(time.Now)   ← time.Now 不加括号，传函数引用
+  并且需要 import "time"
+
+【其他允许的修饰方法】NotEmpty(), MinLen(n), MaxLen(n), Min(n), Max(n), Default(v), Optional()
 【只允许的 import】"entgo.io/ent"、"entgo.io/ent/schema/field"，需要时加 "time"`, targetPath)
 
 	user := fmt.Sprintf(`生成文件 %s
@@ -380,45 +391,74 @@ func (%s) Edges() []ent.Edge { return nil }`, targetPath, entity, fieldDesc, ent
 
 func buildHandlerStep(entity, entityLower, entityPlural, fieldDesc string, meta *metadata.ProjectMetadata) GenerationStep {
 	targetPath := fmt.Sprintf("internal/handler/%s_handler.go", entityLower)
-	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
+	system := fmt.Sprintf(`你是 Go 后端专家，熟悉 Huma v2 框架。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
 【绝对禁止——违反则代码无法编译】
-❌ 禁止使用 ent.%sCreateInput、ent.%sUpdateInput、ent.%sMutation——这些类型在 Ent 中不存在
-❌ 禁止忽略错误：_, _ = xxx 或 _, err = xxx 后不检查 err
-❌ 禁止只返回 id 和 title，必须直接返回 ent 查询结果对象
+❌ 禁止定义新的 Handler struct——已有的 Handler struct 在 handler.go 中，直接用 (h *Handler) 挂载方法
+❌ 禁止使用 ent.%sCreateInput、ent.%sUpdateInput——这些类型在 Ent 中不存在
+❌ 禁止忽略 Save() 的错误——Save() 返回两个值，必须 result, err :=
+❌ 禁止写 _, err := ...DeleteOneID().Exec()——Exec() 只返回 error，必须 err :=
+❌ 禁止使用 *response.Success(x)——response.Success 返回值类型，不是指针，不能解引用
 
-【必须这样写 request struct（不能用 ent 的类型）】
-type %sRequest struct {
-  Title  string  `+"`"+`json:"title"`+"`"+`
-  Author string  `+"`"+`json:"author"`+"`"+`
-  Price  float64 `+"`"+`json:"price"`+"`"+`
-}
+【Huma Handler 签名规范】
+所有方法必须使用 Huma 函数签名（不是 echo.Context）：
+  func (h *Handler) Create%s(ctx context.Context, input *Create%sInput) (*%sResponse, error)
 
-【必须这样调用 Ent（严格照此写法，不能自创方法名）】
-  创建：h.Client.%s.Create().SetTitle(req.Title).SetAuthor(req.Author).SetPrice(req.Price).Save(ctx)
+【Input / Output struct 写法】
+  // 创建请求 Body：
+  type Create%sInput struct {
+      Body struct {
+          Title  string  `+"`"+`json:"title"`+"`"+`
+          Author string  `+"`"+`json:"author"`+"`"+`
+          Price  float64 `+"`"+`json:"price"`+"`"+`
+      }
+  }
+  // 路径参数：
+  type Get%sInput struct { ID int `+"`"+`path:"id"`+"`"+` }
+  type Update%sInput struct {
+      ID   int `+"`"+`path:"id"`+"`"+`
+      Body struct { Title string `+"`"+`json:"title"`+"`"+`; Author string `+"`"+`json:"author"`+"`"+`; Price float64 `+"`"+`json:"price"`+"`"+` }
+  }
+  type Delete%sInput struct { ID int `+"`"+`path:"id"`+"`"+` }
+  // 响应：
+  type %sResponse struct { Body response.Response }
+  type %sListResponse struct { Body response.Response }
+
+【Ent API 写法（严格遵守）】
+  创建：h.Client.%s.Create().SetTitle(input.Body.Title).SetAuthor(input.Body.Author).SetPrice(input.Body.Price).Save(ctx)
   列表：h.Client.%s.Query().All(ctx)
-  按ID：h.Client.%s.Get(ctx, id)      // id 是 int，用 strconv.Atoi 解析
-  更新：h.Client.%s.UpdateOneID(id).SetTitle(req.Title).SetPrice(req.Price).Save(ctx)
-  删除：h.Client.%s.DeleteOneID(id).Exec(ctx)
+  按ID：h.Client.%s.Get(ctx, input.ID)
+  更新：h.Client.%s.UpdateOneID(input.ID).SetTitle(input.Body.Title)...Save(ctx)
+  删除：h.Client.%s.DeleteOneID(input.ID).Exec(ctx)  // 只返回 error
 
-【响应】
-  成功：return c.JSON(http.StatusOK, response.Success(result))   // result 是 ent 返回的对象
-  错误：return c.JSON(http.StatusBadRequest, response.Error(400, "msg"))
+【错误返回使用 huma 标准错误，不要使用 response.Error()】
+  return nil, huma.Error400BadRequest("参数错误", fmt.Errorf("msg"))
+  return nil, huma.Error404NotFound("不存在", fmt.Errorf("id=%%d", input.ID))
+  return nil, huma.Error500InternalServerError("失败", err)
 
-【import】必须包含："%s/ent", "%s/internal/response", "github.com/labstack/echo/v4", "log/slog", "net/http", "strconv"`,
+【成功响应】
+  return &%sResponse{Body: response.Success(result)}, nil
+
+【import】必须包含："context", "fmt", "%s/ent", "%s/internal/response", "github.com/danielgtaylor/huma/v2", "log/slog"`,
 		targetPath,
+		entity, entity,
 		entity, entity, entity,
 		entity,
+		entity,
+		entity,
+		entity, entity,
+		entity, entity,
 		entity, entity, entity, entity, entity,
+		entity,
 		meta.ModulePath, meta.ModulePath)
 
 	user := fmt.Sprintf(`生成文件 %s
 实体名：%s，路由前缀 /api/v1/%s
-字段列表（根据字段生成 %sRequest struct 和对应的 SetXxx 调用）：
+字段列表（根据字段生成 Input struct 和对应的 SetXxx 调用）：
 %s
 5个方法：Create%s、List%ss、Get%s、Update%s、Delete%s
-所有方法必须挂载在已有的 *Handler 上，Handler 已持有 h.Client *ent.Client。`,
-		targetPath, entity, entityPlural, entity, fieldDesc,
+所有方法挂载在已有的 *Handler 上，Handler 已持有 h.Client *ent.Client。`,
+		targetPath, entity, entityPlural, fieldDesc,
 		entity, entity, entity, entity, entity)
 
 	return GenerationStep{Name: "handler", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}

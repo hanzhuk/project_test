@@ -1,0 +1,75 @@
+# api/openapi.yaml - my-app-v2 API 文档
+# 遵循 OpenAPI 3.1 规范
+openapi: 3.1.0
+info:
+  title: my-app-v2 API
+  description: my-app-v2 后端服务 API 文档
+  version: 1.0.0
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+
+# 统一响应格式
+components:
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 业务错误码，0 表示成功
+          example: 0
+        message:
+          type: string
+          description: 响应消息
+          example: success
+        data:
+          description: 响应数据
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 业务错误码
+          example: 1001
+        message:
+          type: string
+          description: 错误描述
+          example: 请求参数错误
+        details:
+          type: array
+          items:
+            type: string
+          description: 详细错误信息
+
+paths:
+  /health:
+    get:
+      summary: 健康检查
+      description: 检查服务是否正常运行
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/ping:
+    get:
+      summary: Ping 测试
+      description: 测试 API 是否可用
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'

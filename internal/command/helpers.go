@@ -56,6 +56,7 @@ func frontendTitleStr(f string) string {
 }
 
 // injectRoutes 将实体路由自动注入到 handler.go 的 RegisterRoutes 函数。
+// 自动检测 handler.go 使用 Huma 还是纯 Echo，生成对应格式的路由注册代码。
 // 若路由已存在则跳过，保证幂等。
 func injectRoutes(projectDir, entity string) error {
 	handlerPath := filepath.Join(projectDir, "internal", "handler", "handler.go")
@@ -66,19 +67,45 @@ func injectRoutes(projectDir, entity string) error {
 
 	entityLower := strings.ToLower(entity)
 	entityPlural := entityLower + "s"
+	content := string(data)
 
 	// 已注册则跳过
-	if strings.Contains(string(data), fmt.Sprintf("h.Create%s", entity)) {
+	if strings.Contains(content, fmt.Sprintf("h.Create%s", entity)) {
 		return nil
 	}
 
-	routes := fmt.Sprintf(
-		"\n\t// %s 路由\n\tv1.POST(\"/%s\", h.Create%s)\n\tv1.GET(\"/%s\", h.List%ss)\n\tv1.GET(\"/%s/:id\", h.Get%s)\n\tv1.PUT(\"/%s/:id\", h.Update%s)\n\tv1.DELETE(\"/%s/:id\", h.Delete%s)",
-		entity, entityPlural, entity, entityPlural, entity, entityPlural, entity, entityPlural, entity, entityPlural, entity,
-	)
+	// 检测是否使用 Huma（根据 import 或函数签名判断）
+	useHuma := strings.Contains(content, "huma.Register") || strings.Contains(content, "huma.API")
+
+	var routes string
+	var todoPrefix string
+
+	if useHuma {
+		routes = fmt.Sprintf(
+			"\n\t// %s 路由\n"+
+				"\thuma.Register(api, huma.Operation{Method: http.MethodPost,   Path: \"/api/v1/%s\",     Summary: \"创建%s\",   Tags: []string{\"%s\"}}, h.Create%s)\n"+
+				"\thuma.Register(api, huma.Operation{Method: http.MethodGet,    Path: \"/api/v1/%s\",     Summary: \"查询%s列表\", Tags: []string{\"%s\"}}, h.List%ss)\n"+
+				"\thuma.Register(api, huma.Operation{Method: http.MethodGet,    Path: \"/api/v1/%s/{id}\", Summary: \"查询单个%s\", Tags: []string{\"%s\"}}, h.Get%s)\n"+
+				"\thuma.Register(api, huma.Operation{Method: http.MethodPut,    Path: \"/api/v1/%s/{id}\", Summary: \"更新%s\",   Tags: []string{\"%s\"}}, h.Update%s)\n"+
+				"\thuma.Register(api, huma.Operation{Method: http.MethodDelete, Path: \"/api/v1/%s/{id}\", Summary: \"删除%s\",   Tags: []string{\"%s\"}}, h.Delete%s)",
+			entity,
+			entityPlural, entity, entity, entity,
+			entityPlural, entity, entity, entity,
+			entityPlural, entity, entity, entity,
+			entityPlural, entity, entity, entity,
+			entityPlural, entity, entity, entity,
+		)
+		todoPrefix = "// huma.Register"
+	} else {
+		routes = fmt.Sprintf(
+			"\n\t// %s 路由\n\tv1.POST(\"/%s\", h.Create%s)\n\tv1.GET(\"/%s\", h.List%ss)\n\tv1.GET(\"/%s/:id\", h.Get%s)\n\tv1.PUT(\"/%s/:id\", h.Update%s)\n\tv1.DELETE(\"/%s/:id\", h.Delete%s)",
+			entity, entityPlural, entity, entityPlural, entity, entityPlural, entity, entityPlural, entity, entityPlural, entity,
+		)
+		todoPrefix = "// v1."
+	}
 
 	// 将 TODO 注释块替换为实际路由
-	lines := strings.Split(string(data), "\n")
+	lines := strings.Split(content, "\n")
 	var out []string
 	skipTodo := false
 	for _, line := range lines {
@@ -88,8 +115,7 @@ func injectRoutes(projectDir, entity string) error {
 			skipTodo = true
 			continue
 		}
-		// 跳过 TODO 块内的注释行（形如 // v1.XXX）
-		if skipTodo && strings.HasPrefix(trimmed, "// v1.") {
+		if skipTodo && strings.HasPrefix(trimmed, todoPrefix) {
 			continue
 		}
 		skipTodo = false

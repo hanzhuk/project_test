@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"{{.ModulePath}}/ent"
-	"{{.ModulePath}}/internal/response"
+	"github.com/example/my-app-v2/ent"
+	"github.com/example/my-app-v2/internal/response"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/labstack/echo/v4"
@@ -48,9 +48,13 @@ func RegisterRoutes(api huma.API, repo Repo) {
 		Tags:        []string{"健康检查"},
 	}, h.Ping)
 
-	// TODO: 在此处注册业务路由，例如：
-	// huma.Register(api, huma.Operation{Method: http.MethodPost, Path: "/api/v1/users", Summary: "创建用户", Tags: []string{"用户"}}, h.CreateUser)
-	// huma.Register(api, huma.Operation{Method: http.MethodGet,  Path: "/api/v1/users", Summary: "查询用户列表", Tags: []string{"用户"}}, h.ListUsers)
+
+	// Book 路由
+	huma.Register(api, huma.Operation{Method: http.MethodPost,   Path: "/api/v1/books",     Summary: "创建Book",   Tags: []string{"Book"}}, h.CreateBook)
+	huma.Register(api, huma.Operation{Method: http.MethodGet,    Path: "/api/v1/books",     Summary: "查询Book列表", Tags: []string{"Book"}}, h.ListBooks)
+	huma.Register(api, huma.Operation{Method: http.MethodGet,    Path: "/api/v1/books/{id}", Summary: "查询单个Book", Tags: []string{"Book"}}, h.GetBook)
+	huma.Register(api, huma.Operation{Method: http.MethodPut,    Path: "/api/v1/books/{id}", Summary: "更新Book",   Tags: []string{"Book"}}, h.UpdateBook)
+	huma.Register(api, huma.Operation{Method: http.MethodDelete, Path: "/api/v1/books/{id}", Summary: "删除Book",   Tags: []string{"Book"}}, h.DeleteBook)
 }
 
 // Repo 定义数据访问层接口，handler 通过它获取数据库客户端。

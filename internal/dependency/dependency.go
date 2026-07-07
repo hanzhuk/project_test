@@ -153,7 +153,11 @@ func collectGoDeps(backend, orm, database string) []string {
 	// 后端框架依赖
 	switch strings.ToLower(backend) {
 	case "echo":
-		deps = append(deps, "github.com/labstack/echo/v4@latest", "github.com/labstack/echo/v4/middleware@latest")
+		deps = append(deps,
+			"github.com/labstack/echo/v4@latest",
+			"github.com/labstack/echo/v4/middleware@latest",
+			"github.com/danielgtaylor/huma/v2@latest",
+		)
 	case "gin":
 		deps = append(deps, "github.com/gin-gonic/gin@latest")
 	case "fiber":
