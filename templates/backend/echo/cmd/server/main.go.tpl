@@ -22,11 +22,15 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	// 自动加载 .env 文件（文件不存在时忽略，不影响正常启动）
+	_ = godotenv.Load()
+
 	// 解析子命令（支持 migrate 子命令执行数据库迁移）
 	migrateFlag := flag.Bool("migrate", false, "执行数据库迁移后退出")
 	flag.Parse()

@@ -157,6 +157,7 @@ func collectGoDeps(backend, orm, database string) []string {
 			"github.com/labstack/echo/v4@latest",
 			"github.com/labstack/echo/v4/middleware@latest",
 			"github.com/danielgtaylor/huma/v2@latest",
+			"github.com/joho/godotenv@latest",
 		)
 	case "gin":
 		deps = append(deps, "github.com/gin-gonic/gin@latest")

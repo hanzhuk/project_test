@@ -362,17 +362,20 @@ func buildSchemaStep(entity, entityLower, fieldDesc string, meta *metadata.Proje
 
 【绝对禁止——违反则 ent generate 报错】
 ❌ 禁止 field.Float64、field.Int64、field.Integer 等不存在的方法
-❌ 禁止 field.Float("price").Default(0.0).Positive()——Default(0.0) 与 Positive() 矛盾，0.0 不满足 > 0，只用其中一个
-❌ 禁止 field.Time("x").Default(time.Now())——括号调用返回 time.Time 值，Ent 要求传函数引用
-❌ 禁止 field.Time("x").Default(func() interface{} { return nil })——类型错误，Ent 要求 func() time.Time
-❌ 禁止 field.Int("stock") 不加 Optional() 或 Default(0)——没有默认值的必填字段会导致插入失败
+❌ 禁止 field.Float("price").Default(0.0).Positive()——Default(0.0) 与 Positive() 矛盾，只用其中一个
+❌ 禁止 field.Time("x").Default(time.Now())——括号调用返回值，Ent 要求传函数引用 Default(time.Now)
+❌ 禁止 field.Time("x").Default(func() interface{} { return nil })——类型错误
+❌ 禁止非必填字段不加 Optional() 或 Default()——没有默认值的必填字段导致插入报错
+❌ 禁止 field.String("isbn").Unique() 不加 Optional()——空字符串唯一约束冲突
 
-【time 字段的正确写法】
-  可选，不设默认：field.Time("published_at").Optional()
-  有默认值：      field.Time("created_at").Default(time.Now)   ← time.Now 不加括号，传函数引用
-  并且需要 import "time"
+【正确写法参考】
+  可选时间：field.Time("published_at").Optional()
+  默认时间：field.Time("created_at").Default(time.Now)   ← time.Now 不加括号
+  可选字符串：field.String("isbn").Unique().Optional()
+  有默认数字：field.Float("price").Default(0.0)
+  整数默认0：field.Int("stock").Default(0)
 
-【其他允许的修饰方法】NotEmpty(), MinLen(n), MaxLen(n), Min(n), Max(n), Default(v), Optional()
+【允许的修饰方法】NotEmpty(), MinLen(n), MaxLen(n), Min(n), Max(n), Default(v), Optional()
 【只允许的 import】"entgo.io/ent"、"entgo.io/ent/schema/field"，需要时加 "time"`, targetPath)
 
 	user := fmt.Sprintf(`生成文件 %s
@@ -396,6 +399,7 @@ func buildHandlerStep(entity, entityLower, entityPlural, fieldDesc string, meta 
 【绝对禁止——违反则代码无法编译】
 ❌ 禁止定义新的 Handler struct——已有的 Handler struct 在 handler.go 中，直接用 (h *Handler) 挂载方法
 ❌ 禁止使用 ent.%sCreateInput、ent.%sUpdateInput——这些类型在 Ent 中不存在
+❌ 禁止 import 虚构路径如 "模块路径/internal/book/ent"——Ent 客户端包只有一个："%s/ent"
 ❌ 禁止忽略 Save() 的错误——Save() 返回两个值，必须 result, err :=
 ❌ 禁止写 _, err := ...DeleteOneID().Exec()——Exec() 只返回 error，必须 err :=
 ❌ 禁止使用 *response.Success(x)——response.Success 返回值类型，不是指针，不能解引用
@@ -468,27 +472,41 @@ func buildServiceStep(entity, entityLower, fieldDesc string, meta *metadata.Proj
 	targetPath := fmt.Sprintf("internal/service/%s_service.go", entityLower)
 	system := fmt.Sprintf(`你是 Go 后端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-【绝对禁止】
+【绝对禁止——每条都导致编译失败】
+❌ 禁止漏掉 ent 的 import——第一行必须 import "%s/ent"
 ❌ 禁止使用 book.Entity、ent.%sEntity——返回类型必须是 *ent.%s 或 []*ent.%s
-❌ 禁止 import "%s/ent/%s"（除非用到排序常量，否则不要引入）
-❌ 禁止忽略错误
+❌ 禁止 import "%s/ent/%s"（除非真正用到排序常量）
+❌ 禁止使用 int64 作为 ID 类型——Ent ID 是 int，不是 int64
+❌ 禁止写 result := ...Save(ctx)——Save() 返回两个值，必须 result, err :=
+❌ 禁止使用 ent.ErrNotFound——该常量不存在，直接返回原始 err
+❌ 禁止使用 entity.Delete() 或 entity.Update()——Ent 实例上没有这两个方法
+❌ 禁止使用 SetISBN、SetURL 等全大写形式——Ent 生成 camelCase：SetIsbn、SetUrl
 
-【必须这样写】
-- import 只需要："context" 和 "%s/ent"
-- Service struct：type %sService struct { client *ent.Client }
-- 返回类型：*ent.%s 或 []*ent.%s（不是 book.Entity）
-- Ent API：s.client.%s.Create().SetTitle(t).Save(ctx)`,
+【Ent 字段 setter 命名规则（camelCase）】
+  field "isbn" → SetIsbn（不是 SetISBN）
+  field "published_at" → SetPublishedAt（不是 SetPublished_at）
+  field "user_id" → SetUserID（Go 缩写惯例，两个大写字母）
+
+【Ent API 写法（严格遵守）】
+  创建：s.client.%s.Create().SetTitle(t).Save(ctx)       // 返回 (*ent.%s, error)
+  列表：s.client.%s.Query().All(ctx)                      // 返回 ([]*ent.%s, error)
+  按ID：s.client.%s.Get(ctx, id)                          // id 是 int，不是 int64
+  更新：s.client.%s.UpdateOneID(id).SetTitle(t).Save(ctx)
+  删除：s.client.%s.DeleteOneID(id).Exec(ctx)             // 只返回 error
+
+【import 只需要】"context" 和 "%s/ent"`,
 		targetPath,
+		meta.ModulePath,
 		entity, entity, entity,
 		meta.ModulePath, entityLower,
-		meta.ModulePath,
-		entity, entity, entity, entity)
+		entity, entity, entity, entity, entity, entity, entity,
+		meta.ModulePath)
 
 	user := fmt.Sprintf(`生成文件 %s
 实体名：%s，字段：
 %s
 构造函数 New%sService(client *ent.Client) *%sService。
-包含 Create、List、GetByID、Update、Delete 五个方法。`,
+包含 Create、List、GetByID(id int)、Update(id int, ...)、Delete(id int) error 五个方法。`,
 		targetPath, entity, fieldDesc, entity, entity)
 
 	return GenerationStep{Name: "service", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
@@ -498,41 +516,52 @@ func buildFrontendStep(entity, entityLower, entityPlural string, fields []Field,
 	targetPath := fmt.Sprintf("web/src/components/%sManager.tsx", entity)
 	system := fmt.Sprintf(`你是 React TypeScript 前端专家。只需调用一次 write_file 工具，生成文件 %s，生成后立即停止。
 
-【绝对禁止】
+【绝对禁止——每条都导致白屏或功能失效】
 ❌ 禁止写 import React from 'react' 或 React.FormEvent、React.ChangeEvent
 ❌ 禁止用动态 key 访问字段：item[header as keyof Item]
-❌ 禁止直接 setItems(await resp.json())，后端响应是 {code, message, data} 包装格式
-❌ 禁止在保存按钮上设置 disabled={editingId === -1}（保存按钮绝不能在新增时被禁用）
+❌ 禁止直接 setItems(await resp.json())——后端响应格式是 {code, message, data}，必须取 json.data
+❌ 禁止在 useEffect 里调用 setItems(filtered)——这会破坏原始列表，搜索过滤必须在渲染时计算
+❌ 禁止在 fetch 之前调用 resetForm() 或 setEditingId(null)——必须在 .then() 回调里调用
+❌ 禁止 export default XxxManager as React.ComponentType<{}>——这会产生重复 export default 报错
+❌ 禁止保存按钮设置 disabled——保存按钮始终可用
 
 【第一行 import 必须完整列出所有用到的 hook】
 import { useState, useEffect, FormEvent } from 'react'
 
+【搜索过滤的正确写法（在渲染时过滤，不修改 items 状态）】
+const filtered = searchQuery ? items.filter(i => i.title.includes(searchQuery)) : items
+// 渲染表格时用 filtered.map(...)，不要 setItems(filtered)
+
 【后端响应解包——必须这样写】
-fetch('/api/v1/%s').then(r=>r.json()).then(json=>{ if(json.code===0) setItems(json.data) })
+fetch('/api/v1/%s').then(r=>r.json()).then(json=>{ if(json.code===0) setItems(json.data ?? []) })
+
+【保存操作的正确写法——resetForm 必须在 .then() 里】
+fetch('/api/v1/%s', { method:'POST', ... })
+  .then(r=>r.json())
+  .then(json=>{ if(json.code===0) { loadItems(); resetForm(); setEditingId(null) } })
+// 不能在 fetch 之前调用 resetForm()
 
 【新增/编辑 UI 模式——必须严格照此实现】
 - 用 editingId: number|null 控制表单显示，null=隐藏，-1=新增，>0=编辑
 - "新增"按钮：onClick={() => { setEditingId(-1); resetForm() }}
-- 点击编辑时，必须将当前行的实体数据加载到表单状态中（不要调用 resetForm() 清空）
+- 点击编辑时，将当前行数据加载到表单（不要调用 resetForm()）
 - 表单显示条件：{editingId !== null && <form>...</form>}
-- 提交时判断：if(editingId === -1) 调用 POST，else 调用 PUT /{editingId}
-- "取消"按钮：onClick={() => setEditingId(null)}
-- 表单保存按钮：必须保持可用状态，不能禁用
+- 提交时判断：if(editingId === -1) 调用 POST /api/v1/%s，else 调用 PUT /api/v1/%s/{editingId}
 
-【表格渲染——必须用明确字段名】
-正确：<td>{item.title}</td><td>{item.author}</td>
+【表格渲染——必须用明确字段名，不能动态访问】
+正确：<td>{item.title}</td>
 错误：{headers.map(h => <td>{item[h]}</td>)}
 
 【其他规则】使用 Tailwind CSS，使用 fetch 不用 axios。`,
-		targetPath, entityPlural)
+		targetPath, entityPlural, entityPlural, entityPlural, entityPlural)
 
-	fieldDesc := buildFieldDesc(fields)
+	fieldDescStr := buildFieldDesc(fields)
 	user := fmt.Sprintf(`生成文件 %s
 实体名：%s，后端接口基路径：/api/v1/%s
 实体包含以下字段，请在表格和表单中只使用这些字段（不要虚构其他字段）：
 %s
 功能：搜索过滤、新增、编辑、删除的完整 CRUD 界面。
-export default function %sManager()`, targetPath, entity, entityPlural, fieldDesc, entity)
+export default function %sManager()`, targetPath, entity, entityPlural, fieldDescStr, entity)
 
 	return GenerationStep{Name: "frontend", TargetPath: targetPath, SystemPrompt: system, UserPrompt: user}
 }
